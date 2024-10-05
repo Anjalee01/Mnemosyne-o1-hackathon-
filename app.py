@@ -1,13 +1,13 @@
 import os
 from openai import OpenAI
+from dotenv import load_dotenv
 
-user_content = """
-how many Rs are there in the word strawberry
-think step by step
-"""
+load_dotenv()
+user_content = input("User: ")
 
+api_key = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(
-    api_key="d2a52fb173584df59d1d3525d7ed39f1",
+    api_key=api_key,
     base_url="https://api.aimlapi.com/",
 )
 
