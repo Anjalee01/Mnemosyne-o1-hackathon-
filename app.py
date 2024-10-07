@@ -1,4 +1,5 @@
 import os
+import json
 import speech_recognition as sr
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -50,6 +51,18 @@ def generate_story(client, reading_level):
     print(f"Generated {reading_level} story:\n", story)
     return story
 
+# Function to save user progress
+def save_progress(user_data):
+    with open("user_progress.json", "w") as file:
+        json.dump(user_data, file)
+
+# Function to load user progress
+def load_progress():
+    if os.path.exists("user_progress.json"):
+        with open("user_progress.json", "r") as file:
+            return json.load(file)
+    return {"reading_level": "beginner", "last_story": ""}
+
 # Get the API key from environment variables
 api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -59,18 +72,27 @@ client = OpenAI(
     base_url="https://api.aimlapi.com/",
 )
 
+# Load user progress
+user_data = load_progress()
+reading_level = user_data["reading_level"]
+last_story = user_data["last_story"]
+
 # Main loop to capture recitation and adjust story
 while True:
-    # Capture user's recitation
-    user_content = capture_speech()
-    
-    # Determine reading level
-    reading_level = determine_reading_level(user_content)
-    print(f"Determined reading level: {reading_level}")
+    # If there is a last story, prompt the user to recite it
+    if last_story:
+        print("Please recite the last story to continue...")
+        user_content = capture_speech()
+        reading_level = determine_reading_level(user_content)
+        print(f"Determined reading level: {reading_level}")
     
     # Generate and adjust story based on reading level
     story = generate_story(client, reading_level)
     
-    # Wait for user to recite the generated story back to adjust further...
+    # Wait for user to recite the story back
     print("Please recite the generated story back to adjust further...")
     user_content = capture_speech()
+    
+    # Save user progress
+    user_data = {"reading_level": reading_level, "last_story": story}
+    save_progress(user_data)
