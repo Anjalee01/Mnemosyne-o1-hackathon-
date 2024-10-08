@@ -11,7 +11,7 @@ load_dotenv()
 recognizer = sr.Recognizer()
 
 # Function to capture and convert speech to text
-def capture_speech():
+def capture_speech():s
     with sr.Microphone() as source:
         print("Please say something...")
         audio = recognizer.listen(source)
