@@ -1,7 +1,8 @@
 import os
 import json
+import streamlit as st
 import speech_recognition as sr
-from openai import OpenAI
+import openai  # Import the OpenAI package
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -10,26 +11,26 @@ load_dotenv()
 # Initialize the recognizer
 recognizer = sr.Recognizer()
 
-# Function to capture and convert speech to text
-def capture_speech():
-    with sr.Microphone() as source:
-        print("Please say something...")
-        audio = recognizer.listen(source)
+# Callback function for background listening
+def callback(recognizer, audio):
     try:
         user_content = recognizer.recognize_google(audio)
-        print("You said: " + user_content)
-        return user_content
+        st.write(f"You said: {user_content}")
+        st.session_state['user_content'] = user_content
     except sr.UnknownValueError:
-        print("Google Speech Recognition could not understand audio")
-        return ""
+        st.error("Google Speech Recognition could not understand the audio.")
     except sr.RequestError as e:
-        print("Could not request results from Google Speech Recognition service; {0}".format(e))
-        return ""
+        st.error(f"Could not request results from Google Speech Recognition service; {e}")
+
+# Function to capture and convert speech to text (non-blocking)
+def capture_speech():
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source)
+        st.info("Please say something...")
+        recognizer.listen_in_background(source, callback)
 
 # Function to determine reading level
 def determine_reading_level(text):
-    # Placeholder function to determine reading level
-    # You can use more sophisticated methods or models to determine reading level
     if len(text.split()) < 50:
         return "beginner"
     elif len(text.split()) < 100:
@@ -38,17 +39,19 @@ def determine_reading_level(text):
         return "advanced"
 
 # Function to generate a story based on reading level
-def generate_story(client, reading_level):
+def generate_story(reading_level):
     prompt = f"Generate a {reading_level} level story for a user to read."
-    response = client.chat.completions.create(
-        model="o1-mini",
+    
+    # Use the o1-mini model as per your requirement
+    response = openai.ChatCompletion.create(
+        model="o1-mini",  # Keep using o1-mini as the model
         messages=[
             {"role": "system", "content": prompt},
         ],
         max_tokens=2000,
     )
-    story = response.choices[0].message.content
-    print(f"Generated {reading_level} story:\n", story)
+    story = response['choices'][0]['message']['content']
+    st.write(f"Generated {reading_level} story:\n{story}")
     return story
 
 # Function to save user progress
@@ -63,36 +66,41 @@ def load_progress():
             return json.load(file)
     return {"reading_level": "beginner", "last_story": ""}
 
-# Get the API key from environment variables
-api_key = os.environ.get("OPENAI_API_KEY")
+# Get API key from environment variables
+api_key = os.getenv("OPENAI_API_KEY")
 
-# Initialize the OpenAI client
-client = OpenAI(
-    api_key=api_key,
-    base_url="https://api.aimlapi.com/",
-)
+# Set API key for OpenAI
+openai.api_key = api_key
 
 # Load user progress
 user_data = load_progress()
 reading_level = user_data["reading_level"]
 last_story = user_data["last_story"]
 
-# Main loop to capture recitation and adjust story
-while True:
-    # If there is a last story, prompt the user to recite it
-    if last_story:
-        print("Please recite the last story to continue...")
-        user_content = capture_speech()
-        reading_level = determine_reading_level(user_content)
-        print(f"Determined reading level: {reading_level}")
-    
-    # Generate and adjust story based on reading level
-    story = generate_story(client, reading_level)
-    
-    # Wait for user to recite the story back
-    print("Please recite the generated story back to adjust further...")
-    user_content = capture_speech()
-    
-    # Save user progress
-    user_data = {"reading_level": reading_level, "last_story": story}
-    save_progress(user_data)
+# Streamlit UI
+st.title("Speech-to-Story App")
+
+if 'user_content' not in st.session_state:
+    st.session_state['user_content'] = ""
+
+if last_story:
+    st.write("Please recite the last story to continue...")
+    if st.button("Start Listening", on_click=capture_speech, key="listen_story"):
+        if st.session_state['user_content']:
+            reading_level = determine_reading_level(st.session_state['user_content'])
+            st.write(f"Determined reading level: {reading_level}")
+
+if st.button("Generate Story", key="generate_story"):
+    story = generate_story(reading_level)
+    last_story = story
+
+if last_story:
+    st.write("Please recite the generated story back to adjust further...")
+    if st.button("Start Listening", on_click=capture_speech, key="listen_generated_story"):
+        if st.session_state['user_content']:
+            reading_level = determine_reading_level(st.session_state['user_content'])
+            st.write(f"New determined reading level: {reading_level}")
+
+# Save user progress
+user_data = {"reading_level": reading_level, "last_story": last_story}
+save_progress(user_data)

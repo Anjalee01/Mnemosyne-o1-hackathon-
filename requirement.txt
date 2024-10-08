@@ -1,0 +1,7 @@
+SpeechRecognition
+python-dotenv
+openai 
+pipwin
+pipwin install pyaudio
+
+
